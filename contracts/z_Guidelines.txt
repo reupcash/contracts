@@ -1,0 +1,39 @@
+All contracts:
+    - Have an interface file (if they have any public functions) 
+
+All base classes
+    - Go in the "Base" folder
+    - Are declared "abstract"
+    - All storage is defined using hashed storage slots
+        ^-- By doing this, we NEVER run into upgrade problems where storage gets rearranged accidentally
+        ^-- We don't need to worry about the `uint256[50] private gap;` strategy
+        ^-- It *does* increase code complexity (until solidity implements support for slot definitions)
+        ^-- But it's worth it
+    - Should not inherit other base classes for their utility - only to extend their functionality
+        ^-- For example, "Minter" would naturally like to inherit from "Owned", because the "setMinter"
+        ^-- function is "Owner Only".  But instead, it defines "getMinterOwner" as an abstract internal
+        ^-- function.  Any fully constructed contract inheriting "Minter" can also inherit "Owned" and
+        ^-- implement "getMinterOwner" simply to point to "Owned.owner()".  By doing this, we allow
+        ^-- ourselves to swap out "Owned" for a future "FancySuperOwned" one day.  We also get to avoid
+        ^-- the annoyances of solidity's base class order definitions.
+        ^-- However, "UUPSUpgradeableVersion" extends the functionality of "UUPSUpgradeable", so does
+        ^-- inherit directly from "UUPSUpgradeable".
+
+All libraries
+    - Go in the "Library" folder
+
+All test contracts
+    - Go in the "Test" or "Deployed Test" folder
+    - "Test" folder contracts are never actually deployed.  Only used for unit tests.
+    - "Deployed Test" folder contracts can be deployed, but only in test environments.
+
+All deployable contracts
+    - Inherit "UpgradeableBase", making them upgradeable, versioned, owned and recoverable
+    - Do not inherit from other deployable contracts - only abstract base contracts in the "Base" folder
+    - Have names starting with "RE"
+    - Define a public boolean constant starting with "is" then the contract name
+        ^-- Used for safe contract upgrades
+        ^-- Upgrade functionality must check the isXXX() to ensure we're upgrading to the same type of
+        ^-- contract
+    - Declare all storage at the top of the contract
+        ^-- Make it obvious where additional storage can be appended safely during upgrades

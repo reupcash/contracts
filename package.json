@@ -1,0 +1,23 @@
+{
+    "name": "r-suite",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "compile": "npx hardhat size-contracts",
+        "test": "npx hardhat test --typecheck"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@nomicfoundation/hardhat-chai-matchers": "^1.0.5",
+        "@nomicfoundation/hardhat-toolbox": "^2.0.1",
+        "@openzeppelin/contracts": "4.8.1",
+        "@openzeppelin/contracts-upgradeable": "4.8.1",
+        "@openzeppelin/hardhat-upgrades": "^1.22.0",
+        "chai": "^4.3.7",
+        "ethers": "^5.7.2",
+        "hardhat": "^2.12.6",
+        "hardhat-contract-sizer": "^2.7.0"
+    }
+}
