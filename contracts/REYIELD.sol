@@ -6,7 +6,7 @@ import "./Base/UpgradeableBase.sol";
 import "./IREYIELD.sol";
 
 /** REYIELD = Real Estate Yields ... rental income or other income may be distributed to holders */
-contract REYIELD is BridgeSelfStakingERC20, UpgradeableBase(3), IREYIELD
+contract REYIELD is BridgeSelfStakingERC20, UpgradeableBase(4), IREYIELD
 {
     bool public constant isREYIELD = true;
     string public constant url = "https://reup.cash";

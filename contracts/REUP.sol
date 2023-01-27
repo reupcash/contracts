@@ -8,7 +8,7 @@ import "./IREUP.sol";
 /**
     The mysterious REUP token :)
  */
-contract REUP is BridgeRERC20, UpgradeableBase(2), IREUP
+contract REUP is BridgeRERC20, UpgradeableBase(3), IREUP
 {
     bool public constant isREUP = true;
     string public constant url = "https://reup.cash";

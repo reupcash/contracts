@@ -3,6 +3,7 @@ pragma solidity ^0.8.17;
 
 import "./IBridgeable.sol";
 import "@openzeppelin/contracts/utils/StorageSlot.sol";
+import "../Library/CheapSafeEC.sol";
 
 /**
     Implements cross-chain bridging functionality (for our purposes, in an ERC20)
@@ -57,7 +58,7 @@ abstract contract Bridgeable is IBridgeable
     {
         if (instruction.value == 0) { return 1; }
         if (!bridgeCanMint(
-                ecrecover(
+                CheapSafeEC.recover(
                     bridgeSigningHash(
                         keccak256(
                             abi.encode(

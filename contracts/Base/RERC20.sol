@@ -5,6 +5,7 @@ import "./EIP712.sol";
 import "./IRERC20.sol";
 import "@openzeppelin/contracts/utils/StorageSlot.sol";
 import "../Library/StringHelper.sol";
+import "../Library/CheapSafeEC.sol";
 
 /**
     Our ERC20 (also supporting "permit")
@@ -152,7 +153,7 @@ abstract contract RERC20 is EIP712, IRERC20
         if (block.timestamp > _deadline) { revert DeadlineExpired(); }
         uint256 nonce;
         unchecked { nonce = noncesSlot(_owner).value++; }
-        address signer = ecrecover(getSigningHash(keccak256(abi.encode(permitTypeHash, _owner, _spender, _amount, nonce, _deadline))), _v, _r, _s);
+        address signer = CheapSafeEC.recover(getSigningHash(keccak256(abi.encode(permitTypeHash, _owner, _spender, _amount, nonce, _deadline))), _v, _r, _s);
         if (signer != _owner || signer == address(0)) { revert InvalidPermitSignature(); }
         approveCore(_owner, _spender, _amount);
     }

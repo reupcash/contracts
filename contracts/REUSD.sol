@@ -6,7 +6,7 @@ import "./Base/UpgradeableBase.sol";
 import "./IREUSD.sol";
 
 /** REUSD = Real Estate USD, our stablecoin */
-contract REUSD is BridgeRERC20, UpgradeableBase(2), IREUSD
+contract REUSD is BridgeRERC20, UpgradeableBase(3), IREUSD
 {
     bool public constant isREUSD = true;
     string public constant url = "https://reup.cash";
