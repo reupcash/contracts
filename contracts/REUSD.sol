@@ -5,7 +5,7 @@ import "./Base/BridgeRERC20.sol";
 import "./Base/UpgradeableBase.sol";
 import "./IREUSD.sol";
 
-/** REUSD = Real Estate USD, our stablecoin */
+/** REUSD = Real Estate USD (not a stablecoin) */
 contract REUSD is BridgeRERC20, UpgradeableBase(3), IREUSD
 {
     bool public constant isREUSD = true;
