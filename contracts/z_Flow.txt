@@ -1,19 +1,19 @@
-REUP is a real-estate backed stablecoin project
+REUP is a real-estate backed project
 
 
 === TOKENS ==============================
 
 --- REUSD
-The stablecoin is REUSD.
+REUSD is not a stablecoin
 
 REUSD will be backed 100% by a combination of:
     - The acquisition cost of a basket of income-producing real estate properties
-    - Other stablecoins, held in the RECustodian contract until they're used to purchase more real estate
+    - Stablecoins, held in the RECustodian contract until they're used to purchase more real estate
 
 As a property's value increases over time, we do not revalue it to mint more REUSD.  Instead, REUSD simply 
 becomes more than 100% backed.
 
-REUSD can be minted by users (or the zapper) 1:1 for other stablecoins.
+REUSD can be minted by users (or the zapper) 1:1 for stablecoins.
 
 --- REYIELD
 A reward token.  Yields collected from real estate income are distributed to REYIELD holders.
