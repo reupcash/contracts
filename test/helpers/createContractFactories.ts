@@ -1,5 +1,5 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers"
-import { TestRECurveZapper__factory, TestGrumpyERC20__factory, TestRECurveBlargitrage__factory, TestREClaimer__factory, TestCheapSafeERC20__factory, TestUUPSUpgradeableVersion__factory, TestERC20__factory, TestREUSD__factory, TestMinter__factory, TestOwned__factory, TestRECoverable__factory, TestRECurveMintedRewards__factory, TestRECustodian__factory, TestREStablecoins__factory, TestREUP__factory, TestREUSDMinter__factory, TestREWardSplitter__factory, TestREYIELD__factory, TestStringHelper__factory, TestRERC20__factory, RERC20__factory, TestUUPSUpgradeable__factory, TestDummyStableswap__factory, TestDummyGauge__factory, TestSelfStakingERC20__factory, TestBridgeRERC20__factory, TestBridgeSelfStakingERC20__factory, TestREBacking__factory } from "../../typechain-types"
+import { TestRECurveZapper__factory, TestGrumpyERC20__factory, TestRECurveBlargitrage__factory, TestREClaimer__factory, TestCheapSafeERC20__factory, TestUUPSUpgradeableVersion__factory, TestERC20__factory, TestREUSD__factory, TestMinter__factory, TestOwned__factory, TestRECoverable__factory, TestRECurveMintedRewards__factory, TestRECustodian__factory, TestREStablecoins__factory, TestREUP__factory, TestREUSDMinter__factory, TestREWardSplitter__factory, TestREYIELD__factory, TestStringHelper__factory, TestRERC20__factory, RERC20__factory, TestUUPSUpgradeable__factory, TestDummyStableswap__factory, TestDummyGauge__factory, TestSelfStakingERC20__factory, TestBridgeRERC20__factory, TestBridgeSelfStakingERC20__factory, TestREBacking__factory, TestREUSDExit__factory, TestREBlank__factory } from "../../typechain-types"
 
 export type ContractFactories = {
     REYIELD: TestREYIELD__factory
@@ -29,6 +29,8 @@ export type ContractFactories = {
     RECurveBlargitrage: TestRECurveBlargitrage__factory
     RECurveZapper: TestRECurveZapper__factory
     GrumpyERC20: TestGrumpyERC20__factory
+    REUSDExit: TestREUSDExit__factory
+    REBlank: TestREBlank__factory
 }
 
 let lastOwner: SignerWithAddress
@@ -64,7 +66,9 @@ export default function createContractFactories(owner: SignerWithAddress): Contr
         REClaimer: new TestREClaimer__factory(owner),
         RECurveBlargitrage: new TestRECurveBlargitrage__factory(owner),
         RECurveZapper: new TestRECurveZapper__factory(owner),
-        GrumpyERC20: new TestGrumpyERC20__factory(owner)
+        GrumpyERC20: new TestGrumpyERC20__factory(owner),
+        REUSDExit: new TestREUSDExit__factory(owner),
+        REBlank: new TestREBlank__factory(owner)
     }
     return lastFactories
 }
