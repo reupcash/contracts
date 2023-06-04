@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "../REStablecoins.sol";
 
@@ -10,12 +10,12 @@ contract TestREStablecoins is REStablecoins
     function setContractVersion(uint256 version) public { nextContractVersion = version; }
     
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(StablecoinConfig memory _stablecoin1, StablecoinConfig memory _stablecoin2, StablecoinConfig memory _stablecoin3)
+    constructor(IERC20 _stablecoin1, IERC20 _stablecoin2, IERC20 _stablecoin3)
         REStablecoins(_stablecoin1, _stablecoin2, _stablecoin3)
     {        
     }
 
-    function getStablecoin1() external view returns (StablecoinConfig memory) { return supportedStablecoins()[0].config; }
-    function getStablecoin2() external view returns (StablecoinConfig memory) { return supportedStablecoins()[1].config; }
-    function getStablecoin3() external view returns (StablecoinConfig memory) { return supportedStablecoins()[2].config; }
+    function getStablecoin1() external view returns (IERC20) { return supported()[0].token; }
+    function getStablecoin2() external view returns (IERC20) { return supported()[1].token; }
+    function getStablecoin3() external view returns (IERC20) { return supported()[2].token; }
 }

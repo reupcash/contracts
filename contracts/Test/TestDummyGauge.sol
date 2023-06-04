@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "../Curve/ICurveGauge.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
@@ -43,4 +43,6 @@ contract TestDummyGauge is ERC20("test", "TST"), ERC20Permit("test"), ICurveGaug
     function set_reward_distributor(address _reward_token, address _distributor) external {}
 
     function version() external view returns (string memory) {}
+
+    function mint(uint256 amount) external { _mint(msg.sender, amount); }
 }

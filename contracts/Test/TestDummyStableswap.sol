@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "../Curve/ICurveStableSwap.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
@@ -48,6 +48,11 @@ contract TestDummyStableswap is ERC20("test", "TST"), ERC20Permit("test"), ICurv
     function setVirtualPrice(uint256 newPrice) public { get_virtual_price = newPrice; }
     function setNextAddLiquidityMintAmount(uint256 amount) public { nextAddLiquidityMintAmount = amount; }
     function setNextRemoveLiquidityOneCoinReceived(uint256 amount) public { nextRemoveLiquidityOneCoinReceived = amount; }
+    function calc_withdraw_one_coin(uint256 amount, int128 index) external view returns (uint256) {}
+    function fee() external view returns (uint256) {}
+    function calc_token_amount(uint256[2] memory amounts, bool isDeposit) external view returns (uint256) {}
+    function calc_token_amount(uint256[3] memory amounts, bool isDeposit) external view returns (uint256) {}
+    function calc_token_amount(uint256[4] memory amounts, bool isDeposit) external view returns (uint256) {}
 
     function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256) {}
 
