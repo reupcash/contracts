@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "../IREUSD.sol";
 import "./IREUSDMinterBase.sol";
@@ -49,7 +49,17 @@ abstract contract REUSDMinterBase is IREUSDMinterBase
         view
         returns (uint256 reusdAmount)
     {        
-        return stablecoins.getStablecoinConfig(address(paymentToken)).decimals == 6 ? paymentTokenAmount * 10**12 : paymentTokenAmount;
+        return stablecoins.getMultiplyFactor(paymentToken) * paymentTokenAmount;
+    }
+
+    function getPaymentAmount(IERC20 paymentToken, uint256 reusdAmount)
+        internal
+        view
+        returns (uint256 paymentAmount)
+    {
+        uint256 factor = stablecoins.getMultiplyFactor(paymentToken);
+        paymentAmount = reusdAmount / factor;
+        unchecked { if (paymentAmount * factor != reusdAmount) { ++paymentAmount; } }
     }
 
     /**
@@ -60,10 +70,9 @@ abstract contract REUSDMinterBase is IREUSDMinterBase
      */
     function mintREUSDCore(address from, IERC20 paymentToken, address recipient, uint256 reusdAmount)
         internal
+        returns (uint256 paymentAmount)
     {
-        uint256 factor = stablecoins.getStablecoinConfig(address(paymentToken)).decimals == 6 ? 10**12 : 1;
-        uint256 paymentAmount = reusdAmount / factor;
-        unchecked { if (paymentAmount * factor != reusdAmount) { ++paymentAmount; } }
+        paymentAmount = getPaymentAmount(paymentToken, reusdAmount);
         paymentToken.safeTransferFrom(from, address(custodian), paymentAmount);
         REUSD.mint(recipient, reusdAmount);
         emit MintREUSD(from, paymentToken, reusdAmount);

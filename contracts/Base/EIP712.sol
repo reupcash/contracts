@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 /**
     Functionality to help implement "permit" on ERC20's
