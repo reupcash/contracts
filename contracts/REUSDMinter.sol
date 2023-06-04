@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./Base/UpgradeableBase.sol";
 import "./IREUSDMinter.sol";
@@ -8,7 +8,7 @@ import "./Base/REUSDMinterBase.sol";
 /**
     Lets people directly mint REUSD
  */
-contract REUSDMinter is REUSDMinterBase, UpgradeableBase(2), IREUSDMinter
+contract REUSDMinter is REUSDMinterBase, UpgradeableBase(5), IREUSDMinter
 {
     bool public constant isREUSDMinter = true;
 

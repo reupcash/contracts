@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./Base/IUpgradeableBase.sol";
 import "./Base/IERC20Full.sol";
@@ -7,6 +7,7 @@ import "./Base/IREUSDMinterBase.sol";
 import "./Curve/ICurveStableSwap.sol";
 import "./Curve/ICurvePool.sol";
 import "./Curve/ICurveGauge.sol";
+import "./Base/ISelfStakingERC20.sol";
 
 interface IRECurveZapper is IREUSDMinterBase, IUpgradeableBase
 {
@@ -17,6 +18,7 @@ interface IRECurveZapper is IREUSDMinterBase, IUpgradeableBase
     error TooManyBasePoolCoins();
     error MissingREUSD();
     error BasePoolWithREUSD();
+    error UnbalancedProportions();
 
     function isRECurveZapper() external view returns (bool);
     function basePoolCoinCount() external view returns (uint256);
@@ -24,10 +26,18 @@ interface IRECurveZapper is IREUSDMinterBase, IUpgradeableBase
     function basePool() external view returns (ICurvePool);
     function basePoolToken() external view returns (IERC20);
     function gauge() external view returns (ICurveGauge);
+    function getBalancedZapREUSDAmount(IERC20 token, uint256 tokenAmount) external view returns (uint256 reusdAmount);
 
     function zap(IERC20 token, uint256 tokenAmount, bool mintREUSD) external;
     function zapPermit(IERC20Full token, uint256 tokenAmount, bool mintREUSD, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
-    function unzap(IERC20 token, uint256 tokenAmount) external;    
+    function unzap(IERC20 desiredToken, uint256 gaugeAmount) external;
+    function unzapPermit(IERC20 desiredToken, uint256 gaugeAmount, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
+    function balancedZap(IERC20 token, uint256 tokenAmount) external;
+    function balancedZapPermit(IERC20Full token, uint256 tokenAmount, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
+    function balancedUnzap(uint256 gaugeAmount, uint256 gaugeAmountForREUSD, uint32[] calldata basePoolProportions) external;
+    function balancedUnzapPermit(uint256 gaugeAmount, uint256 gaugeAmountForREUSD, uint32[] calldata basePoolProportions, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
+    function compound(ISelfStakingERC20 selfStakingToken) external;
+    function compoundPermit(ISelfStakingERC20 selfStakingToken, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
 
     struct TokenAmount
     {        

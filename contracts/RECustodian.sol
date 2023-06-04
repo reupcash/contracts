@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./IRECustodian.sol";
 import "./Base/UpgradeableBase.sol";
@@ -7,7 +7,7 @@ import "./Base/UpgradeableBase.sol";
 /**
     Any funds that will end up purchasing real estate should land here
  */
-contract RECustodian is UpgradeableBase(2), IRECustodian
+contract RECustodian is UpgradeableBase(3), IRECustodian
 {
     bool public constant isRECustodian = true;
     mapping (address => uint256) public amountRecovered;

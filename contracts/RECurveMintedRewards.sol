@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./IRECurveMintedRewards.sol";
 import "./Base/UpgradeableBase.sol";
@@ -13,16 +13,13 @@ import "./Library/Roles.sol";
     Occasionally, we call "sendRewards", which calculates how much to add to the curve gauge
 
     The gauge will distribute rewards for the following 7 days
-
-    A "unit" can be anything, for example "$1000 of curve liquidity".  Rewards will be the sum
-    of a flat rate, plus the rate multiplied by units.
  */
-contract RECurveMintedRewards is UpgradeableBase(2), IRECurveMintedRewards
+contract RECurveMintedRewards is UpgradeableBase(3), IRECurveMintedRewards
 {
     bytes32 constant RewardManagerRole = keccak256("ROLE:RECurveMintedRewards:rewardManager");
 
     uint256 public perDay;
-    uint256 public perDayPerUnit;
+    uint256 public perDayPerDollar;
     uint256 public lastRewardTimestamp;
 
     //------------------ end of storage
@@ -32,12 +29,15 @@ contract RECurveMintedRewards is UpgradeableBase(2), IRECurveMintedRewards
     ICanMint public immutable rewardToken;
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     ICurveGauge public immutable gauge;
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    ICurveStableSwap immutable pool;
     
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(ICanMint _rewardToken, ICurveGauge _gauge)
     {
         rewardToken = _rewardToken;
         gauge = _gauge;
+        pool = gauge.lp_token();
     }
 
     function initialize()
@@ -62,15 +62,26 @@ contract RECurveMintedRewards is UpgradeableBase(2), IRECurveMintedRewards
         _;
     }
 
-    function sendRewards(uint256 units)
+    function getCurveDollars()
+        private
+        view
+        returns (uint256)
+    {
+        return pool.get_virtual_price() * gauge.totalSupply() / (1 ether * 1 ether);
+    }
+
+    function sendRewards(uint256 maxDollars)
         public
         onlyRewardManager
     {
         uint256 interval = block.timestamp - lastRewardTimestamp;
         if (interval == 0) { return; }
+        uint256 dollars = getCurveDollars();
+        if (dollars > maxDollars) { revert MaxDollarsExceeded(); }
+        if (maxDollars > 1000000000000 || (maxDollars > 1000 && maxDollars > dollars * 2)) { revert MaxDollarsTooHigh(); }
         lastRewardTimestamp = block.timestamp;
         
-        uint256 amount = interval * (units * perDayPerUnit + perDay) / 86400;
+        uint256 amount = interval * (dollars * perDayPerDollar + perDay) / 86400;
         if (amount > 0)
         {
             rewardToken.mint(address(this), amount);
@@ -78,14 +89,14 @@ contract RECurveMintedRewards is UpgradeableBase(2), IRECurveMintedRewards
         }
     }
 
-    function sendAndSetRewardRate(uint256 _perDay, uint256 _perDayPerUnit, uint256 units)
+    function sendAndSetRewardRate(uint256 _perDay, uint256 _perDayPerDollar, uint256 maxDollars)
         public
         onlyRewardManager
     {
-        sendRewards(units);
+        sendRewards(maxDollars);
         perDay = _perDay;
-        perDayPerUnit = _perDayPerUnit;
-        emit RewardRate(_perDay, _perDayPerUnit);
+        perDayPerDollar = _perDayPerDollar;
+        emit RewardRate(_perDay, _perDayPerDollar);
     }
     
     function setRewardManager(address manager, bool enabled) 

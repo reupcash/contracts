@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./IREUSD.sol";
 import "./Base/UpgradeableBase.sol";
@@ -25,7 +25,7 @@ import "./IRECurveBlargitrage.sol";
     A call to "balance" can be the last step in zap/unzap in the 
     RECurveZapper contract.
  */
-contract RECurveBlargitrage is UpgradeableBase(2), IRECurveBlargitrage
+contract RECurveBlargitrage is UpgradeableBase(3), IRECurveBlargitrage
 {
     uint256 public totalAmount;
     

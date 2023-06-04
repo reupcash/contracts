@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./Base/BridgeRERC20.sol";
 import "./Base/UpgradeableBase.sol";
 import "./IREUSD.sol";
 
-/** REUSD = Real Estate USD (not a stablecoin) */
-contract REUSD is BridgeRERC20, UpgradeableBase(3), IREUSD
+/** REUSD = Real Estate USD token */
+contract REUSD is BridgeRERC20, UpgradeableBase(4), IREUSD
 {
     bool public constant isREUSD = true;
     string public constant url = "https://reup.cash";

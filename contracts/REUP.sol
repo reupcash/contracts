@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./Base/BridgeRERC20.sol";
 import "./Base/UpgradeableBase.sol";
@@ -8,7 +8,7 @@ import "./IREUP.sol";
 /**
     The mysterious REUP token :)
  */
-contract REUP is BridgeRERC20, UpgradeableBase(3), IREUP
+contract REUP is BridgeRERC20, UpgradeableBase(4), IREUP
 {
     bool public constant isREUP = true;
     string public constant url = "https://reup.cash";

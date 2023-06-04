@@ -1,20 +1,15 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
-import "./Base/IERC20Full.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./Base/IUpgradeableBase.sol";
 
 interface IREStablecoins is IUpgradeableBase
 {
-    struct StablecoinConfig
-    {
-        IERC20Full token;
-        uint8 decimals;
-        bool hasPermit;
-    }
     struct StablecoinConfigWithName
     {
-        StablecoinConfig config;
+        IERC20 token;
+        uint8 decimals;
         string name;
         string symbol;
     }
@@ -26,9 +21,9 @@ interface IREStablecoins is IUpgradeableBase
     error StablecoinBakedIn();
 
     function isREStablecoins() external view returns (bool);
-    function supportedStablecoins() external view returns (StablecoinConfigWithName[] memory);
-    function getStablecoinConfig(address token) external view returns (StablecoinConfig memory config);
+    function supported() external view returns (StablecoinConfigWithName[] memory);
+    function getMultiplyFactor(IERC20 token) external view returns (uint256);
 
-    function addStablecoin(address stablecoin, bool hasPermit) external;
-    function removeStablecoin(address stablecoin) external;
+    function add(IERC20 stablecoin) external;
+    function remove(IERC20 stablecoin) external;
 }

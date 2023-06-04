@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./IREClaimer.sol";
 import "./IREYIELD.sol";
@@ -9,11 +9,18 @@ import "./Base/UpgradeableBase.sol";
     A convenience contract for users to be able to collect all the rewards
     from our ecosystem in a single transaction
  */
-contract REClaimer is UpgradeableBase(2), IREClaimer
+contract REClaimer is UpgradeableBase(3), IREClaimer
 {
     bool public constant isREClaimer = true;
 
-    function claim(ICurveGauge[] memory gauges, ISelfStakingERC20[] memory tokens)
+    function claim(ICurveGauge gauge, ISelfStakingERC20 token)
+        public
+    {
+        gauge.claim_rewards(msg.sender);
+        token.claimFor(msg.sender);
+    }
+
+    function multiClaim(ICurveGauge[] memory gauges, ISelfStakingERC20[] memory tokens)
         public
     {
         unchecked

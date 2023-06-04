@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./IREWardSplitter.sol";
 import "./Base/ISelfStakingERC20.sol";
@@ -21,7 +21,7 @@ import "./Base/UpgradeableBase.sol";
     genuinely a problem, we can mitigate it by adding rewards
     more frequently
  */
-contract REWardSplitter is UpgradeableBase(2), IREWardSplitter
+contract REWardSplitter is UpgradeableBase(6), IREWardSplitter
 {
     bool public constant isREWardSplitter = true;
 
@@ -43,7 +43,7 @@ contract REWardSplitter is UpgradeableBase(2), IREWardSplitter
         assert(IREWardSplitter(newImplementation).isREWardSplitter());
     }
 
-    function splitRewards(uint256 amount, ISelfStakingERC20 selfStakingERC20, ICurveGauge[] calldata gauges)
+    function splitRewards(uint256 amount, ISelfStakingERC20 selfStakingERC20, ICurveGauge[] memory gauges)
         public
         view 
         returns (uint256 selfStakingERC20Amount, uint256[] memory gaugeAmounts)
@@ -87,7 +87,7 @@ contract REWardSplitter is UpgradeableBase(2), IREWardSplitter
         }
     }
 
-    function addReward(uint256 amount, ISelfStakingERC20 selfStakingERC20, ICurveGauge[] calldata gauges)
+    function addReward(uint256 amount, ISelfStakingERC20 selfStakingERC20, ICurveGauge[] memory gauges)
         public
         onlyOwner
     {
@@ -108,10 +108,47 @@ contract REWardSplitter is UpgradeableBase(2), IREWardSplitter
         }
     }
 
-    function addRewardPermit(uint256 amount, ISelfStakingERC20 selfStakingERC20, ICurveGauge[] calldata gauges, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+    function addRewardPermit(uint256 amount, ISelfStakingERC20 selfStakingERC20, ICurveGauge[] memory gauges, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
         public
     {
         IERC20Permit(address(selfStakingERC20.rewardToken())).permit(msg.sender, address(this), permitAmount, deadline, v, r, s);
         addReward(amount, selfStakingERC20, gauges);
+    }
+
+    function addRewardToGauge(ICurveGauge gauge, IERC20 rewardToken, uint256 amount)
+        public
+        onlyOwner
+    {
+        rewardToken.transferFrom(msg.sender, address(this), amount);
+        gauge.deposit_reward_token(address(rewardToken), amount);
+    }
+
+    function addRewardToGaugePermit(ICurveGauge gauge, IERC20Full rewardToken, uint256 amount, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        public
+    {
+        rewardToken.permit(msg.sender, address(this), permitAmount, deadline, v, r, s);
+        addRewardToGauge(gauge, rewardToken, amount);
+    }
+
+    function multiAddReward(IERC20 rewardToken, ICurveGauge gauge, uint256 gaugeAmount, ISelfStakingERC20 selfStakingERC20, uint256 splitAmount)
+        public
+    {
+        if (gaugeAmount > 0)
+        {
+            addRewardToGauge(gauge, rewardToken, gaugeAmount);
+        }
+        if (splitAmount > 0)
+        {
+            ICurveGauge[] memory gauges = new ICurveGauge[](1);
+            gauges[0] = gauge;
+            addReward(splitAmount, selfStakingERC20, gauges);
+        }
+    }
+
+    function multiAddRewardPermit(IERC20Full rewardToken, ICurveGauge gauge, uint256 gaugeAmount, ISelfStakingERC20 selfStakingERC20, uint256 splitAmount, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        public
+    {
+        rewardToken.permit(msg.sender, address(this), permitAmount, deadline, v, r, s);
+        multiAddReward(rewardToken, gauge, gaugeAmount, selfStakingERC20, splitAmount);
     }
 }

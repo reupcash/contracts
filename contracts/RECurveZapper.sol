@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./Base/UpgradeableBase.sol";
 import "./IRECurveZapper.sol";
@@ -11,7 +11,7 @@ import "./IRECurveBlargitrage.sol";
 using CheapSafeERC20 for IERC20;
 using CheapSafeERC20 for ICurveStableSwap;
 
-contract RECurveZapper is REUSDMinterBase, UpgradeableBase(2), IRECurveZapper
+contract RECurveZapper is REUSDMinterBase, UpgradeableBase(8), IRECurveZapper
 {
     /*
         addWrapper(unwrappedToken, supportedButWrappedToken, wrapSig, unwrapSig);
@@ -72,24 +72,28 @@ contract RECurveZapper is REUSDMinterBase, UpgradeableBase(2), IRECurveZapper
         basePoolCoin0 = basePool.coins(0);
         basePoolCoin1 = basePool.coins(1);
         uint256 count = 2;
+        IERC20 _basePoolCoin2 = IERC20(address(0));
+        IERC20 _basePoolCoin3 = IERC20(address(0));
         try basePool.coins(2) returns (IERC20Full coin2)
         {
-            basePoolCoin2 = coin2;
+            _basePoolCoin2 = coin2;
             count = 3;
             try basePool.coins(3) returns (IERC20Full coin3)
             {
-                basePoolCoin3 = coin3;
+                _basePoolCoin3 = coin3;
                 count = 4;
             }
             catch {}
         }
         catch {}
         basePoolCoinCount = count;
+        basePoolCoin2 = _basePoolCoin2;
+        basePoolCoin3 = _basePoolCoin3;
 
         try pool.coins(2) returns (IERC20Full) { revert TooManyPoolCoins(); } catch {}
         try basePool.coins(4) returns (IERC20Full) { revert TooManyBasePoolCoins(); } catch {}        
 
-        if (address(poolCoin0) != address(REUSD) && address(poolCoin1) != address(REUSD)) { revert MissingREUSD(); }
+        if (poolCoin0 != REUSD && poolCoin1 != REUSD) { revert MissingREUSD(); }
         if (basePoolCoin0 == REUSD || basePoolCoin1 == REUSD || basePoolCoin2 == REUSD || basePoolCoin3 == REUSD) { revert BasePoolWithREUSD(); }
     }
 
@@ -220,54 +224,185 @@ contract RECurveZapper is REUSDMinterBase, UpgradeableBase(2), IRECurveZapper
         zap(token, tokenAmount, mintREUSD);
     }
 
-    function unzap(IERC20 token, uint256 tokenAmount)
+    function getBalancedZapREUSDAmount(IERC20 token, uint256 tokenAmount) 
+        public
+        view
+        returns (uint256 reusdAmount)
+    {
+        // Disregards slippage/imbalance on the base pool, which we assume to be well-funded
+        // Assume REUSD = $1
+        if (!isBasePoolToken(token)) { revert UnsupportedToken(); }
+        uint256 maxREUSDAmount = getREUSDAmount(token, tokenAmount);
+        if (maxREUSDAmount == 0) { revert ZeroAmount(); }
+
+        uint256 reusdBalance = pool.balances(poolCoin0 == REUSD ? 0 : 1);
+        uint256 baseDollars = pool.balances(poolCoin0 == REUSD ? 1 : 0) * basePool.get_virtual_price() / 1 ether;
+
+        reusdAmount = baseDollars + maxREUSDAmount;
+        if (reusdAmount <= reusdBalance) {
+            reusdAmount = 0;
+        }
+        else {
+            reusdAmount = (reusdAmount - reusdBalance) / 2;
+            if (reusdAmount > maxREUSDAmount) { reusdAmount = maxREUSDAmount; }
+        }
+    }
+
+    function balancedZap(IERC20 token, uint256 tokenAmount)
         public
     {
-        unzapCore(token, tokenAmount);
+        uint256 reusdAmount = getBalancedZapREUSDAmount(token, tokenAmount);
+        if (reusdAmount > 0) {      
+            tokenAmount -= mintREUSDCore(msg.sender, token, address(this), reusdAmount);
+        }
+        if (tokenAmount > 0) {
+            token.safeTransferFrom(msg.sender, address(this), tokenAmount);
+            tokenAmount = addBasePoolLiquidity(token, tokenAmount);
+            if (tokenAmount == 0) { revert ZeroAmount(); }
+        }
+        tokenAmount = CheapSafeCurve.safeAddLiquidity(address(pool), pool, [
+            basePoolToken == poolCoin0 ? tokenAmount : reusdAmount,
+            basePoolToken == poolCoin1 ? tokenAmount : reusdAmount
+            ], 0);
+        if (tokenAmount == 0) { revert ZeroAmount(); }
+
+        gauge.deposit(tokenAmount, msg.sender, true);
+
         blargitrage.balance();
     }
 
-    function unzapCore(IERC20 token, uint256 tokenAmount)
+    function balancedZapPermit(IERC20Full token, uint256 tokenAmount, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        public
+    {
+        token.permit(msg.sender, address(this), permitAmount, deadline, v, r, s);
+        balancedZap(token, tokenAmount);
+    }
+
+    function unzap(IERC20 desiredToken, uint256 gaugeAmount)
+        public
+    {
+        unzapCore(desiredToken, gaugeAmount);
+        blargitrage.balance();
+    }
+
+    function unzapPermit(IERC20 desiredToken, uint256 gaugeAmount, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        public
+    {
+        gauge.permit(msg.sender, address(this), permitAmount, deadline, v, r, s);
+        unzap(desiredToken, gaugeAmount);
+    }
+
+    function unzapCore(IERC20 desiredToken, uint256 amount)
         private
     {
-        if (tokenAmount == 0) { revert ZeroAmount(); }       
+        if (amount == 0) { revert ZeroAmount(); }       
 
-        gauge.transferFrom(msg.sender, address(this), tokenAmount);
+        gauge.transferFrom(msg.sender, address(this), amount);
         gauge.claim_rewards(msg.sender);
-        gauge.withdraw(tokenAmount, false);
+        CheapSafeCurve.safeWithdraw(address(gauge), amount, false);
 
         /*
             Now, we have pool tokens (1 gauge token yields 1 pool token)
         */
 
-        if (token == pool)
+        if (desiredToken == pool)
         {
             // If they want the pool token, just send it and we're done
-            token.safeTransfer(msg.sender, tokenAmount);
+            desiredToken.safeTransfer(msg.sender, amount);
             return;
         }
-        if (token == poolCoin0 || token == poolCoin1)
+        if (desiredToken == poolCoin0 || desiredToken == poolCoin1)
         {
             // If they want either REUSD or the base pool token, then
             // remove liquidity to them directly and we're done
-            CheapSafeCurve.safeRemoveLiquidityOneCoin(address(pool), token, token == poolCoin0 ? 0 : 1, tokenAmount, 1, msg.sender);
+            CheapSafeCurve.safeRemoveLiquidityOneCoin(address(pool), desiredToken, desiredToken == poolCoin0 ? 0 : 1, amount, 1, msg.sender);
             return;
         }
         
-        if (!isBasePoolToken(token)) { revert UnsupportedToken(); }
+        if (!isBasePoolToken(desiredToken)) { revert UnsupportedToken(); }
 
         // They want one of the base pool coins, so remove pool
         // liquidity to get base pool tokens, then remove base pool
         // liquidity directly to the them
-        tokenAmount = CheapSafeCurve.safeRemoveLiquidityOneCoin(address(pool), basePoolToken, poolCoin0 == basePoolToken ? 0 : 1, tokenAmount, 1, address(this));
+        amount = CheapSafeCurve.safeRemoveLiquidityOneCoin(address(pool), basePoolToken, poolCoin0 == basePoolToken ? 0 : 1, amount, 1, address(this));
         
         CheapSafeCurve.safeRemoveLiquidityOneCoin(
             address(basePool), 
-            token, 
-            token == basePoolCoin0 ? 0 : token == basePoolCoin1 ? 1 : token == basePoolCoin2 ? 2 : 3,
-            tokenAmount, 
+            desiredToken, 
+            desiredToken == basePoolCoin0 ? 0 : desiredToken == basePoolCoin1 ? 1 : desiredToken == basePoolCoin2 ? 2 : 3,
+            amount, 
             1, 
             msg.sender);
+    }
+
+    function balancedUnzap(uint256 gaugeAmount, uint256 gaugeAmountForREUSD, uint32[] calldata basePoolProportions)
+        public
+    {
+        balancedUnzapCore(gaugeAmount, gaugeAmountForREUSD, basePoolProportions);
+        blargitrage.balance();
+    }
+
+    function balancedUnzapCore(uint256 gaugeAmount, uint256 gaugeAmountForREUSD, uint32[] calldata basePoolProportions)
+        private
+    {
+        if (gaugeAmount == 0) { revert ZeroAmount(); }
+        if (gaugeAmountForREUSD > gaugeAmount) { revert UnbalancedProportions(); }
+        if (basePoolProportions.length != basePoolCoinCount) { revert UnbalancedProportions(); }
+        
+        uint256 totalProportions = basePoolProportions[0];
+        uint256 lastNonZeroProportionIndex = 0;
+        for (uint256 x = 1; x < basePoolProportions.length; ++x)
+        {
+            if (basePoolProportions[x] > 0)
+            {
+                totalProportions += basePoolProportions[x];
+                lastNonZeroProportionIndex = x;
+            }
+        }
+        if (totalProportions == 0) { revert UnbalancedProportions(); }
+
+        gauge.transferFrom(msg.sender, address(this), gaugeAmount);
+        gauge.claim_rewards(msg.sender);
+        CheapSafeCurve.safeWithdraw(address(gauge), gaugeAmount, false);
+
+        /*
+            Now, we have pool tokens (1 gauge token yields 1 pool token)
+        */
+
+        if (gaugeAmountForREUSD > 0)
+        {
+            // Remove REUSD and send it directly to the user
+            CheapSafeCurve.safeRemoveLiquidityOneCoin(address(pool), REUSD, REUSD == poolCoin0 ? 0 : 1, gaugeAmountForREUSD, 1, msg.sender);
+            gaugeAmount -= gaugeAmountForREUSD;
+            if (gaugeAmount == 0) { return; }
+        }
+
+        // Remove base pool tokens
+        gaugeAmount = CheapSafeCurve.safeRemoveLiquidityOneCoin(address(pool), basePoolToken, basePoolToken == poolCoin0 ? 0 : 1, gaugeAmount, 1, address(this));
+        uint256 remainingAmount = gaugeAmount;
+
+        for (uint256 x = 0; x < basePoolProportions.length; ++x)
+        {
+            uint256 amount = x >= lastNonZeroProportionIndex ? remainingAmount : ((gaugeAmount * basePoolProportions[x]) / totalProportions);
+            if (amount > 0)
+            {
+                CheapSafeCurve.safeRemoveLiquidityOneCoin(
+                    address(basePool), 
+                    x == 0 ? basePoolCoin0 : x == 1 ? basePoolCoin1 : x == 2 ? basePoolCoin2 : basePoolCoin3,
+                    x, 
+                    amount, 
+                    1, 
+                    msg.sender);
+                remainingAmount -= amount;
+            }
+        }
+    }
+
+    function balancedUnzapPermit(uint256 gaugeAmount, uint256 gaugeAmountForREUSD, uint32[] calldata basePoolProportions, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        public
+    {
+        gauge.permit(msg.sender, address(this), permitAmount, deadline, v, r, s);
+        balancedUnzap(gaugeAmount, gaugeAmountForREUSD, basePoolProportions);
     }
 
     function multiZap(TokenAmount[] calldata mints, TokenAmount[] calldata tokenAmounts)
@@ -359,5 +494,24 @@ contract RECurveZapper is REUSDMinterBase, UpgradeableBase(2), IRECurveZapper
             permits[x].token.permit(msg.sender, address(this), permits[x].permitAmount, permits[x].deadline, permits[x].v, permits[x].r, permits[x].s);
         }
         multiZap(mints, tokenAmounts);
+    }
+
+    function compound(ISelfStakingERC20 selfStakingToken)
+        public
+    {
+        IERC20 rewardToken = selfStakingToken.rewardToken();
+        uint256 rewardAmount = rewardToken.balanceOf(msg.sender);
+        gauge.claim_rewards(msg.sender);
+        selfStakingToken.claimFor(msg.sender);
+        rewardAmount = rewardToken.balanceOf(msg.sender) - rewardAmount;
+        if (rewardAmount == 0) { revert ZeroAmount(); }
+        balancedZap(rewardToken, rewardAmount);
+    }
+
+    function compoundPermit(ISelfStakingERC20 selfStakingToken, uint256 permitAmount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        public
+    {
+        IERC20Full(address(selfStakingToken.rewardToken())).permit(msg.sender, address(this), permitAmount, deadline, v, r, s);
+        compound(selfStakingToken);
     }
 }

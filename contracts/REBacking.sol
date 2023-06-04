@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./Base/UpgradeableBase.sol";
 import "./IREBacking.sol";
@@ -8,7 +8,7 @@ import "./IREBacking.sol";
     An informational contract, not used for anything other than
     display purposes at the moment
  */
-contract REBacking is UpgradeableBase(2), IREBacking
+contract REBacking is UpgradeableBase(3), IREBacking
 {
     uint256 public propertyAcquisitionCost;
 

@@ -1,41 +1,62 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "./IREStablecoins.sol";
 import "./Base/UpgradeableBase.sol";
+import "./Base/IERC20Full.sol";
 
 /**
     Supported stablecoins configuration
 
     The "baked in" stablecoins are a gas optimization.  We support up to 3 of them, or could increase this (but we probably won't!)
 
-    All stablecoins MUST have 6 or 18 decimals.  If this ever changes, we need to change code in other contracts which rely on this behavior
+    At present, we limit stablecoins to 6 or 18 decimals, but this is only a gas optimization.
 
-    For each stablecoin, we track the # of decimals and whether or not it supports "permit"
+    External contracts probably just call "getStablecoinDecimals".  Everything else is front-end helpers or admin, pretty much.
 
-    External contracts probably just call "getStablecoinConfig".  Everything else is front-end helpers or admin, pretty much.
+    Version 2 -> 3 ... Simplifying it.  Stop tracking permit abilities.  It's better suited on front end.  Other future-use plans have changed, so this simplification made sense.
  */
-contract REStablecoins is UpgradeableBase(2), IREStablecoins
+contract REStablecoins is UpgradeableBase(4), IREStablecoins
 {
-    address[] private moreStablecoinAddresses;
-    mapping (address => StablecoinConfig) private moreStablecoins;
+    IERC20[] private moreStablecoinAddresses;
+    mapping (IERC20 => uint256) private moreStablecoinMultiplyFactors;
 
     //------------------ end of storage
     
     bool public constant isREStablecoins = true;
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
-    uint256 private immutable stablecoin1; // Because `struct StablecoinConfig` can't be stored as immutable
+    IERC20 private immutable stablecoin1;
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
-    uint256 private immutable stablecoin2;
+    IERC20 private immutable stablecoin2;
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
-    uint256 private immutable stablecoin3;
+    IERC20 private immutable stablecoin3;
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    uint256 private immutable factor1;
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    uint256 private immutable factor2;
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    uint256 private immutable factor3;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(StablecoinConfig memory _stablecoin1, StablecoinConfig memory _stablecoin2, StablecoinConfig memory _stablecoin3)
+    constructor(IERC20 _stablecoin1, IERC20 _stablecoin2, IERC20 _stablecoin3)
     {
-        stablecoin1 = toUint256(_stablecoin1);
-        stablecoin2 = toUint256(_stablecoin2);
-        stablecoin3 = toUint256(_stablecoin3);
+        stablecoin1 = _stablecoin1;
+        stablecoin2 = _stablecoin2;
+        stablecoin3 = _stablecoin3;
+        factor1 = loadFactor(_stablecoin1);
+        factor2 = loadFactor(_stablecoin2);
+        factor3 = loadFactor(_stablecoin3);
+    }
+
+    function loadFactor(IERC20 _token) 
+        private
+        view
+        returns (uint256 factor)
+    {
+        if (address(_token) == address(0)) { return 0; }
+        uint8 decimals = IERC20Full(address(_token)).decimals();
+        if (decimals != 6 && decimals != 18) { revert TokenNotSupported(); }
+        return decimals == 6 ? 10**12 : 1;
     }
 
     function checkUpgradeBase(address newImplementation)
@@ -46,7 +67,7 @@ contract REStablecoins is UpgradeableBase(2), IREStablecoins
         assert(IREStablecoins(newImplementation).isREStablecoins());
     }
 
-    function supportedStablecoins()
+    function supported()
         public
         view
         returns (StablecoinConfigWithName[] memory stablecoins)
@@ -54,119 +75,95 @@ contract REStablecoins is UpgradeableBase(2), IREStablecoins
         unchecked
         {
             uint256 builtInCount = 0;
-            if (stablecoin1 != 0) { ++builtInCount; }
-            if (stablecoin2 != 0) { ++builtInCount; }
-            if (stablecoin3 != 0) { ++builtInCount; }
+            if (address(stablecoin1) != address(0)) { ++builtInCount; }
+            if (address(stablecoin2) != address(0)) { ++builtInCount; }
+            if (address(stablecoin3) != address(0)) { ++builtInCount; }
             stablecoins = new StablecoinConfigWithName[](builtInCount + moreStablecoinAddresses.length);
             uint256 at = 0;
-            if (stablecoin1 != 0) { stablecoins[at++] = toStablecoinConfigWithName(toStablecoinConfig(stablecoin1)); }
-            if (stablecoin2 != 0) { stablecoins[at++] = toStablecoinConfigWithName(toStablecoinConfig(stablecoin2)); }
-            if (stablecoin3 != 0) { stablecoins[at++] = toStablecoinConfigWithName(toStablecoinConfig(stablecoin3)); }
+            if (address(stablecoin1) != address(0)) { stablecoins[at++] = toStablecoinConfigWithName(stablecoin1); }
+            if (address(stablecoin2) != address(0)) { stablecoins[at++] = toStablecoinConfigWithName(stablecoin2); }
+            if (address(stablecoin3) != address(0)) { stablecoins[at++] = toStablecoinConfigWithName(stablecoin3); }
             for (uint256 x = moreStablecoinAddresses.length; x > 0;) 
             {
-                stablecoins[at++] = toStablecoinConfigWithName(moreStablecoins[moreStablecoinAddresses[--x]]);
+                stablecoins[at++] = toStablecoinConfigWithName(moreStablecoinAddresses[--x]);
             }
         }
     }
 
-    function toUint256(StablecoinConfig memory stablecoin)
-        private
-        view
-        returns (uint256)
-    {        
-        unchecked
-        {
-            if (address(stablecoin.token) == address(0)) { return 0; }
-            if (stablecoin.decimals != 6 && stablecoin.decimals != 18) { revert TokenNotSupported(); }
-            if (stablecoin.decimals != stablecoin.token.decimals()) { revert TokenMisconfigured(); }
-            if (stablecoin.hasPermit) { stablecoin.token.DOMAIN_SEPARATOR(); }
-            return uint256(uint160(address(stablecoin.token))) | (uint256(stablecoin.decimals) << 160) | (stablecoin.hasPermit ? 1 << 168 : 0);
-        }
-    }
-
-    function toStablecoinConfig(uint256 data)
-        private
-        pure
-        returns (StablecoinConfig memory config)
-    {
-        unchecked
-        {
-            config.token = IERC20Full(address(uint160(data)));
-            config.decimals = uint8(data >> 160);
-            config.hasPermit = data >> 168 != 0;
-        }
-    }
-
-    function toStablecoinConfigWithName(StablecoinConfig memory config)
+    function toStablecoinConfigWithName(IERC20 token)
         private
         view
         returns (StablecoinConfigWithName memory configWithName)
     {
         return StablecoinConfigWithName({
-            config: config,
-            name: config.token.name(),
-            symbol: config.token.symbol()
+            token: token,
+            decimals: IERC20Full(address(token)).decimals(),
+            name: IERC20Full(address(token)).name(),
+            symbol: IERC20Full(address(token)).symbol()
         });
     }
 
-    function getStablecoinConfig(address token)
+    /** Returns a number which can be multiplied by a token amount to standardize to 18 decimal places
+        If a token supports 18 decimals, this returns 1
+        If a token supports 6 decimals, this returns 10**12
+        Generally:  10 ** [18 - decimals]
+        If a token is not in our list of supported stablecoins, this reverts with TokenNotSupported
+     */
+    function getMultiplyFactor(IERC20 token)
         public
         view
-        returns (StablecoinConfig memory config)
+        returns (uint256 factor)
     {
         unchecked
         {
-            if (token == address(0)) { revert TokenNotSupported(); }
-            if (token == address(uint160(stablecoin1))) { return toStablecoinConfig(stablecoin1); }
-            if (token == address(uint160(stablecoin2))) { return toStablecoinConfig(stablecoin2); }
-            if (token == address(uint160(stablecoin3))) { return toStablecoinConfig(stablecoin3); }
-            config = moreStablecoins[token];
-            if (address(config.token) == address(0)) { revert TokenNotSupported(); }            
+            if (address(token) == address(0)) { revert TokenNotSupported(); }
+            if (token == stablecoin1) { return factor1; }
+            if (token == stablecoin2) { return factor2; }
+            if (token == stablecoin3) { return factor3; }
+            factor = moreStablecoinMultiplyFactors[token];
+            if (factor == 0) { revert TokenNotSupported(); }            
         }
     }
 
-    function addStablecoin(address stablecoin, bool hasPermit)
+    function add(IERC20 stablecoin)
         public
         onlyOwner
     {
-        if (stablecoin == address(uint160(stablecoin1)) ||
-            stablecoin == address(uint160(stablecoin2)) ||
-            stablecoin == address(uint160(stablecoin3)) ||
-            address(moreStablecoins[stablecoin].token) != address(0))
+        if (stablecoin == stablecoin1 ||
+            stablecoin == stablecoin2 ||
+            stablecoin == stablecoin3 ||
+            moreStablecoinMultiplyFactors[stablecoin] > 0)
         {
             revert StablecoinAlreadyExists();
         }
-        if (hasPermit) { IERC20Full(stablecoin).DOMAIN_SEPARATOR(); }
-        uint8 decimals = IERC20Full(stablecoin).decimals();
-        if (decimals != 6 && decimals != 18) { revert TokenNotSupported(); }
+        if (address(stablecoin) == address(0)) { revert TokenNotSupported(); }
+        moreStablecoinMultiplyFactors[stablecoin] = loadFactor(stablecoin);
         moreStablecoinAddresses.push(stablecoin);
-        moreStablecoins[stablecoin] = StablecoinConfig({
-            token: IERC20Full(stablecoin),
-            decimals: decimals,
-            hasPermit: hasPermit
-        });
     }
 
-    function removeStablecoin(address stablecoin)
+    function remove(IERC20 stablecoin)
         public
         onlyOwner
     {
-        if (stablecoin == address(uint160(stablecoin1)) ||
-            stablecoin == address(uint160(stablecoin2)) ||
-            stablecoin == address(uint160(stablecoin3)))
+        if (moreStablecoinMultiplyFactors[stablecoin] > 0)
+        {
+            moreStablecoinMultiplyFactors[stablecoin] = 0;
+            for (uint256 x = moreStablecoinAddresses.length - 1; ; --x) 
+            {
+                if (moreStablecoinAddresses[x] == stablecoin) 
+                {
+                    moreStablecoinAddresses[x] = moreStablecoinAddresses[moreStablecoinAddresses.length - 1];
+                    moreStablecoinAddresses.pop();
+                    return;
+                }
+            }
+        }
+        if (stablecoin == stablecoin1 ||
+            stablecoin == stablecoin2 ||
+            stablecoin == stablecoin3)
         {
             revert StablecoinBakedIn();
         }
-        if (address(moreStablecoins[stablecoin].token) == address(0)) { revert StablecoinDoesNotExist(); }
-        delete moreStablecoins[stablecoin];
-        for (uint256 x = moreStablecoinAddresses.length - 1; ; --x) 
-        {
-            if (moreStablecoinAddresses[x] == stablecoin) 
-            {
-                moreStablecoinAddresses[x] = moreStablecoinAddresses[moreStablecoinAddresses.length - 1];
-                moreStablecoinAddresses.pop();
-                break;
-            }
-        }
+        revert StablecoinDoesNotExist();        
     }
 }
