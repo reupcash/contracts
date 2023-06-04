@@ -27,7 +27,7 @@ describe("REUSDMinter", function () {
         factories = await createContractFactories(owner)
         upgrades.silenceWarnings()
         REUSD = await upgrades.deployProxy(factories.REUSD, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: ["Real Estate USD", "REUSD"] }) as t.TestREUSD
-        Stablecoins = await upgrades.deployProxy(factories.REStablecoins, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [{ token: USDC.address, decimals: 6, hasPermit: true }, { token: USDT.address, decimals: 6, hasPermit: false }, { token: DAI.address, decimals: 18, hasPermit: true }] }) as t.TestREStablecoins
+        Stablecoins = await upgrades.deployProxy(factories.REStablecoins, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [USDC.address, USDT.address, DAI.address] }) as t.TestREStablecoins
         RECustodian = await upgrades.deployProxy(factories.RECustodian, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [] }) as t.TestRECustodian
         REUSDMinter = await upgrades.deployProxy(factories.REUSDMinter, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [RECustodian.address, REUSD.address, Stablecoins.address] }) as t.TestREUSDMinter
         await USDC.connect(owner).approve(REUSDMinter.address, constants.MaxUint256)

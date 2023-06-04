@@ -40,12 +40,18 @@ describe("REClaimer", function () {
         await expect(upgrades.upgradeProxy(c, factories.REClaimer, { unsafeAllow: ["delegatecall"], kind: "uups" })).to.be.revertedWithCustomError(REClaimer, "UpgradeToSameVersion")
     })
 
-    it("claim with nothing works", async function() {
-        await REClaimer.claim([], [])
+    it("multiClaim with nothing works", async function () {
+        await REClaimer.multiClaim([], [])
     })
 
-    it("claim calls all", async function() {
-        await REClaimer.connect(owner).claim(gauges.map(x => x.address), erc20s.map(x => x.address))
+    it("claim calls all", async function () {
+        await REClaimer.connect(owner).claim(gauges[0].address, erc20s[0].address)
+        expect(await gauges[0].claimRewardsAddress()).to.equal(owner.address)
+        expect(await erc20s[0].claimForAddress()).to.equal(owner.address)
+    })
+
+    it("multiClaim calls all", async function () {
+        await REClaimer.connect(owner).multiClaim(gauges.map(x => x.address), erc20s.map(x => x.address))
         for (let gauge of gauges) {
             expect(await gauge.claimRewardsAddress()).to.equal(owner.address)
         }

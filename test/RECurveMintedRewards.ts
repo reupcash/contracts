@@ -5,6 +5,7 @@ import { TestDummyGauge, TestDummyStableswap, TestRECurveMintedRewards, TestREYI
 import "@nomicfoundation/hardhat-chai-matchers"
 import createContractFactories, { ContractFactories } from "./helpers/createContractFactories"
 import { lastBlockTimestamp, setBlockTimestamp } from "./helpers/time"
+import { utils } from "ethers"
 
 
 describe("RECurveMintedRewards", function () {
@@ -29,6 +30,9 @@ describe("RECurveMintedRewards", function () {
         dummyGauge = await factories.DummyGauge.deploy(dummyStableswap.address)
         RECurveMintedRewards = await upgrades.deployProxy(factories.RECurveMintedRewards, [], { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [REYIELD.address, dummyGauge.address] }) as TestRECurveMintedRewards
         await REYIELD.connect(owner).setMinter(RECurveMintedRewards.address, true)
+
+        await dummyStableswap.setVirtualPrice(utils.parseEther("1"))        
+        await dummyGauge.mint(utils.parseEther("1000"))
     })
 
     it("upgrade pattern", async function () {
@@ -49,7 +53,7 @@ describe("RECurveMintedRewards", function () {
         expect(await RECurveMintedRewards.gauge()).to.equal(dummyGauge.address)
         expect(await RECurveMintedRewards.lastRewardTimestamp()).to.equal(0)
         expect(await RECurveMintedRewards.perDay()).to.equal(0)
-        expect(await RECurveMintedRewards.perDayPerUnit()).to.equal(0)
+        expect(await RECurveMintedRewards.perDayPerDollar()).to.equal(0)
     })
 
     it("reward manager functions fail for non-manager", async function () {
@@ -65,52 +69,50 @@ describe("RECurveMintedRewards", function () {
         await RECurveMintedRewards.connect(owner).sendAndSetRewardRate(1, 2, 1234)
         expect(await RECurveMintedRewards.lastRewardTimestamp()).not.to.equal(0)
         expect(await RECurveMintedRewards.perDay()).to.equal(1)
-        expect(await RECurveMintedRewards.perDayPerUnit()).to.equal(2)
+        expect(await RECurveMintedRewards.perDayPerDollar()).to.equal(2)
     })
 
-    it("sendRewards does nothing", async function () {
+    it("sendRewards(1234) does nothing", async function () {
         await RECurveMintedRewards.connect(owner).sendRewards(1234)
         expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(0)
+    })
+
+    it("sendRewards(999) throws", async function () {
+        await expect(RECurveMintedRewards.connect(owner).sendRewards(999)).to.be.revertedWithCustomError(RECurveMintedRewards, "MaxDollarsExceeded")
+    })
+
+    it("sendRewards(too high) throws", async function () {
+        await expect(RECurveMintedRewards.connect(owner).sendRewards(utils.parseEther("1"))).to.be.revertedWithCustomError(RECurveMintedRewards, "MaxDollarsTooHigh")
     })
 
     it("setRewardManager works as expected", async function () {
         await RECurveMintedRewards.connect(owner).setRewardManager(user1.address, true)
         expect(await RECurveMintedRewards.isRewardManager(user1.address)).to.equal(true)
-        await RECurveMintedRewards.connect(user1).sendRewards(0);
-        await RECurveMintedRewards.connect(user1).sendAndSetRewardRate(0, 0, 0);
+        await RECurveMintedRewards.connect(user1).sendRewards(1234);
+        await RECurveMintedRewards.connect(user1).sendAndSetRewardRate(0, 0, 1234);
         await RECurveMintedRewards.connect(owner).setRewardManager(user1.address, false)
         expect(await RECurveMintedRewards.isRewardManager(user1.address)).to.equal(false)
     })
 
     describe("reward 1 per second, 10 per second per unit", function () {
         beforeEach(async function () {
-            await RECurveMintedRewards.connect(owner).sendAndSetRewardRate(86400, 864000, 0)
+            await RECurveMintedRewards.connect(owner).sendAndSetRewardRate(86400, 864000, 1234)
         })
 
         it("initialized as expected", async function () {
             expect(await RECurveMintedRewards.lastRewardTimestamp()).not.to.equal(0)
             expect(await RECurveMintedRewards.perDay()).to.equal(86400)
-            expect(await RECurveMintedRewards.perDayPerUnit()).to.equal(864000)
+            expect(await RECurveMintedRewards.perDayPerDollar()).to.equal(864000)
         })
 
-        it("sendRewards(0) works", async function () {
-            await RECurveMintedRewards.sendRewards(0)
-            expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(1)
+        it("sendRewards(1234) works", async function () {
+            await RECurveMintedRewards.sendRewards(1234)
+            expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(1000 * 10 + 1)
         })
 
-        it("sendRewardsTwice(0) works", async function () {
-            await RECurveMintedRewards.sendRewardsTwice(0)
-            expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(1)
-        })
-
-        it("sendRewards(1) works", async function () {
-            await RECurveMintedRewards.sendRewards(1)
-            expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(11)
-        })
-
-        it("sendRewardsTwice(1) works", async function () {
-            await RECurveMintedRewards.sendRewardsTwice(1)
-            expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(11)
+        it("sendRewardsTwice(1234) works", async function () {
+            await RECurveMintedRewards.sendRewardsTwice(1234)
+            expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(1000 * 10 + 1)
         })
 
         describe("15 minutes has passed", function () {
@@ -118,14 +120,9 @@ describe("RECurveMintedRewards", function () {
                 await setBlockTimestamp(await lastBlockTimestamp() + 60 * 15 - 1)
             })
 
-            it("sendRewards(0) works", async function () {
-                await RECurveMintedRewards.sendRewards(0)
-                expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(86400 / 4 / 24)
-            })
-
-            it("sendRewards(123) works", async function () {
-                await RECurveMintedRewards.sendRewards(123)
-                expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(86400 / 4 / 24 + 864000 * 123 / 4 / 24)
+            it("sendRewards(1234) works", async function () {
+                await RECurveMintedRewards.sendRewards(1234)
+                expect(await REYIELD.balanceOf(dummyGauge.address)).to.equal(86400 / 4 / 24 + 864000 * 1000 / 4 / 24)
             })
         })
     })

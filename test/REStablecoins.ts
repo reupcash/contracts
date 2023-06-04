@@ -5,7 +5,9 @@ import { ERC20, TestREStablecoins } from "../typechain-types"
 import "@nomicfoundation/hardhat-chai-matchers"
 import createContractFactories, { ContractFactories } from "./helpers/createContractFactories"
 import deployStablecoins from "./helpers/deployStablecoins"
-const { constants } = ethers
+const { utils, constants } = ethers
+
+const factor6 = utils.parseUnits("1", 12)
 
 describe("REStablecoins", function () {
     let owner: SignerWithAddress
@@ -21,324 +23,215 @@ describe("REStablecoins", function () {
         ; ({ DAI, USDC, USDT } = await deployStablecoins(owner));
         factories = createContractFactories(owner)
         upgrades.silenceWarnings()
-        stablecoins = await upgrades.deployProxy(factories.REStablecoins, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [{ token: USDC.address, decimals: 6, hasPermit: true }, { token: USDT.address, decimals: 6, hasPermit: false }, { token: DAI.address, decimals: 18, hasPermit: true }] }) as TestREStablecoins
+        stablecoins = await upgrades.deployProxy(factories.REStablecoins, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [USDC.address, USDT.address, DAI.address] }) as TestREStablecoins
     })
 
     it("upgrade pattern", async function () {
-        const c = await upgrades.deployProxy(factories.REStablecoins, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [{ token: USDC.address, decimals: 6, hasPermit: true }, { token: USDT.address, decimals: 6, hasPermit: false }, { token: DAI.address, decimals: 18, hasPermit: true }] })
+        const c = await upgrades.deployProxy(factories.REStablecoins, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [USDC.address, USDT.address, DAI.address] })
         await c.setContractVersion(2e9)
-        const c2 = await upgrades.upgradeProxy(c, factories.REStablecoins, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [{ token: USDC.address, decimals: 6, hasPermit: true }, { token: USDT.address, decimals: 6, hasPermit: false }, { token: DAI.address, decimals: 18, hasPermit: true }] })
+        const c2 = await upgrades.upgradeProxy(c, factories.REStablecoins, { unsafeAllow: ["delegatecall"], kind: "uups", constructorArgs: [USDC.address, USDT.address, DAI.address] })
         expect(c.address).to.equal(c2.address)
     })
 
     it("initializes as expected", async function () {
         expect(await stablecoins.owner()).to.equal(owner.address)
-        expect((await stablecoins.getStablecoin1()).token).to.equal(USDC.address)
-        expect((await stablecoins.getStablecoin1()).decimals).to.equal(6)
-        expect((await stablecoins.getStablecoin1()).hasPermit).to.equal(true)
-        expect((await stablecoins.getStablecoin2()).token).to.equal(USDT.address)
-        expect((await stablecoins.getStablecoin2()).decimals).to.equal(6)
-        expect((await stablecoins.getStablecoin2()).hasPermit).to.equal(false)
-        expect((await stablecoins.getStablecoin3()).token).to.equal(DAI.address)
-        expect((await stablecoins.getStablecoin3()).decimals).to.equal(18)
-        expect((await stablecoins.getStablecoin3()).hasPermit).to.equal(true)
-        const coins = await stablecoins.supportedStablecoins()
+        expect(await stablecoins.getStablecoin1()).to.equal(USDC.address)
+        expect(await stablecoins.getStablecoin2()).to.equal(USDT.address)
+        expect(await stablecoins.getStablecoin3()).to.equal(DAI.address)
+        const coins = await stablecoins.supported()
         expect(coins.length).to.equal(3)
-        expect(coins[0].config.token).to.equal(USDC.address)
-        expect(coins[0].config.decimals).to.equal(6)
-        expect(coins[0].config.hasPermit).to.equal(true)
-        expect(coins[1].config.token).to.equal(USDT.address)
-        expect(coins[1].config.decimals).to.equal(6)
-        expect(coins[1].config.hasPermit).to.equal(false)
-        expect(coins[2].config.token).to.equal(DAI.address)
-        expect(coins[2].config.decimals).to.equal(18)
-        expect(coins[2].config.hasPermit).to.equal(true)
-    })
-
-    it("wrong number of decimals fails", async function () {
-        await expect(factories.REStablecoins.deploy({ token: USDC.address, decimals: 18, hasPermit: true }, { token: USDT.address, decimals: 6, hasPermit: false }, { token: DAI.address, decimals: 18, hasPermit: true })).to.be.revertedWithCustomError(stablecoins, "TokenMisconfigured")
-        await expect(factories.REStablecoins.deploy({ token: USDC.address, decimals: 6, hasPermit: true }, { token: USDT.address, decimals: 6, hasPermit: false }, { token: DAI.address, decimals: 6, hasPermit: true })).to.be.revertedWithCustomError(stablecoins, "TokenMisconfigured")
-        await expect(factories.REStablecoins.deploy({ token: USDC.address, decimals: 6, hasPermit: true }, { token: USDT.address, decimals: 18, hasPermit: false }, { token: DAI.address, decimals: 18, hasPermit: true })).to.be.revertedWithCustomError(stablecoins, "TokenMisconfigured")
+        expect(coins[0].token).to.equal(USDC.address)
+        expect(coins[0].decimals).to.equal(6)
+        expect(coins[1].token).to.equal(USDT.address)
+        expect(coins[1].decimals).to.equal(6)
+        expect(coins[2].token).to.equal(DAI.address)
+        expect(coins[2].decimals).to.equal(18)
     })
 
     it("owner functions fail for non-owner", async function () {
-        await expect(stablecoins.connect(user1).addStablecoin(USDC.address, true)).to.be.revertedWithCustomError(stablecoins, "NotOwner")
-        await expect(stablecoins.connect(user1).removeStablecoin(USDC.address)).to.be.revertedWithCustomError(stablecoins, "NotOwner")
+        await expect(stablecoins.connect(user1).add(USDC.address)).to.be.revertedWithCustomError(stablecoins, "NotOwner")
+        await expect(stablecoins.connect(user1).remove(USDC.address)).to.be.revertedWithCustomError(stablecoins, "NotOwner")
     })
 
-    it("addStablecoin fails if existing", async function () {
-        await expect(stablecoins.connect(owner).addStablecoin(USDC.address, true)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
-        await expect(stablecoins.connect(owner).addStablecoin(USDT.address, true)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
-        await expect(stablecoins.connect(owner).addStablecoin(DAI.address, true)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
+    it("add fails if existing", async function () {
+        await expect(stablecoins.connect(owner).add(USDC.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
+        await expect(stablecoins.connect(owner).add(USDT.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
+        await expect(stablecoins.connect(owner).add(DAI.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
     })
 
-    it("removeStablecoin fails for built-in", async function () {
-        await expect(stablecoins.connect(owner).removeStablecoin(USDC.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
-        await expect(stablecoins.connect(owner).removeStablecoin(USDT.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
-        await expect(stablecoins.connect(owner).removeStablecoin(DAI.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
+    it("remove fails for built-in", async function () {
+        await expect(stablecoins.connect(owner).remove(USDC.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
+        await expect(stablecoins.connect(owner).remove(USDT.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
+        await expect(stablecoins.connect(owner).remove(DAI.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
     })
 
-    it("getStablecoinConfig works for USDC", async function () {
-        const config = await stablecoins.getStablecoinConfig(USDC.address)
-        await expect(config.token).to.equal(USDC.address)
-        await expect(config.decimals).to.equal(6)
-        await expect(config.hasPermit).to.equal(true)
+    it("getDecimals works", async function () {
+        await expect(await stablecoins.getMultiplyFactor(USDC.address)).to.equal(factor6)
+        await expect(await stablecoins.getMultiplyFactor(USDT.address)).to.equal(factor6)
+        await expect(await stablecoins.getMultiplyFactor(DAI.address)).to.equal(1)
     })
 
-    it("getStablecoinConfig works for USDT", async function () {
-        const config = await stablecoins.getStablecoinConfig(USDT.address)
-        await expect(config.token).to.equal(USDT.address)
-        await expect(config.decimals).to.equal(6)
-        await expect(config.hasPermit).to.equal(false)
+    it("getDecimals fails for address(0)", async function () {
+        await expect(stablecoins.getMultiplyFactor(constants.AddressZero)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
     })
-
-    it("getStablecoinConfig works for DAI", async function () {
-        const config = await stablecoins.getStablecoinConfig(DAI.address)
-        await expect(config.token).to.equal(DAI.address)
-        await expect(config.decimals).to.equal(18)
-        await expect(config.hasPermit).to.equal(true)
-    })
-
-    it("getStablecoinConfig fails for address(0)", async function () {
-        await expect(stablecoins.getStablecoinConfig(constants.AddressZero)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
-    })
-    it("getStablecoinConfig fails for non-existent", async function () {
-        await expect(stablecoins.getStablecoinConfig(user1.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
+    it("getDecimals fails for non-existent", async function () {
+        await expect(stablecoins.getMultiplyFactor(user1.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
     })
 
     it("add fails for decimals != 6 or 18", async function () {
         const erc = await factories.ERC20.deploy()
         await erc.setDecimals(5)
-        await expect(stablecoins.connect(owner).addStablecoin(erc.address, true)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
+        await expect(stablecoins.connect(owner).add(erc.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
     })
 
     it("deploy fails for decimals != 6 or 18", async function () {
         const erc = await factories.ERC20.deploy()
         await erc.setDecimals(5)
-        await expect(factories.REStablecoins.deploy({ token: erc.address, decimals: 5, hasPermit: true }, { token: USDT.address, decimals: 6, hasPermit: false }, { token: DAI.address, decimals: 18, hasPermit: true })).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
+        await expect(factories.REStablecoins.deploy(erc.address, constants.AddressZero, constants.AddressZero)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
     })
 
-    it("deploy fails for decimals mismatch", async function () {
-        const erc = await factories.ERC20.deploy()
-        await erc.setDecimals(5)
-        await expect(factories.REStablecoins.deploy({ token: erc.address, decimals: 6, hasPermit: true }, { token: USDT.address, decimals: 6, hasPermit: false }, { token: DAI.address, decimals: 18, hasPermit: true })).to.be.revertedWithCustomError(stablecoins, "TokenMisconfigured")
-    })
-
-    describe("addStablecoin (3 more)", function () {
+    describe("add (3 more)", function () {
         let USDC2: ERC20
         let USDT2: ERC20
         let DAI2: ERC20
 
         beforeEach(async function () {
             ; ({ DAI: DAI2, USDC: USDC2, USDT: USDT2 } = await deployStablecoins(owner));
-            await stablecoins.connect(owner).addStablecoin(USDC2.address, true)
-            await stablecoins.connect(owner).addStablecoin(USDT2.address, false)
-            await stablecoins.connect(owner).addStablecoin(DAI2.address, true)
+            await stablecoins.connect(owner).add(USDC2.address)
+            await stablecoins.connect(owner).add(USDT2.address)
+            await stablecoins.connect(owner).add(DAI2.address)
         })
 
         it("initializes as expected", async function () {
             expect(await stablecoins.owner()).to.equal(owner.address)
-            expect((await stablecoins.getStablecoin1()).token).to.equal(USDC.address)
-            expect((await stablecoins.getStablecoin1()).decimals).to.equal(6)
-            expect((await stablecoins.getStablecoin1()).hasPermit).to.equal(true)
-            expect((await stablecoins.getStablecoin2()).token).to.equal(USDT.address)
-            expect((await stablecoins.getStablecoin2()).decimals).to.equal(6)
-            expect((await stablecoins.getStablecoin2()).hasPermit).to.equal(false)
-            expect((await stablecoins.getStablecoin3()).token).to.equal(DAI.address)
-            expect((await stablecoins.getStablecoin3()).decimals).to.equal(18)
-            expect((await stablecoins.getStablecoin3()).hasPermit).to.equal(true)
-            const coins = await stablecoins.supportedStablecoins()
+            expect(await stablecoins.getStablecoin1()).to.equal(USDC.address)
+            expect(await stablecoins.getStablecoin2()).to.equal(USDT.address)
+            expect(await stablecoins.getStablecoin3()).to.equal(DAI.address)
+            const coins = await stablecoins.supported()
             expect(coins.length).to.equal(6)
-            expect(coins[0].config.token).to.equal(USDC.address)
-            expect(coins[0].config.decimals).to.equal(6)
-            expect(coins[0].config.hasPermit).to.equal(true)
+            expect(coins[0].token).to.equal(USDC.address)
+            expect(coins[0].decimals).to.equal(6)
             expect(coins[0].name).to.equal(await USDT.name())
             expect(coins[0].symbol).to.equal(await USDT.symbol())
-            expect(coins[1].config.token).to.equal(USDT.address)
-            expect(coins[1].config.decimals).to.equal(6)
-            expect(coins[1].config.hasPermit).to.equal(false)
-            expect(coins[2].config.token).to.equal(DAI.address)
-            expect(coins[2].config.decimals).to.equal(18)
-            expect(coins[2].config.hasPermit).to.equal(true)
+            expect(coins[1].token).to.equal(USDT.address)
+            expect(coins[1].decimals).to.equal(6)
+            expect(coins[2].token).to.equal(DAI.address)
+            expect(coins[2].decimals).to.equal(18)
             expect(coins[2].name).to.equal(await DAI.name())
             expect(coins[2].symbol).to.equal(await DAI.symbol())
-            expect(coins.filter(x => x.config.token === USDC2.address)[0].config.token).to.equal(USDC2.address)
-            expect(coins.filter(x => x.config.token === USDC2.address)[0].config.decimals).to.equal(6)
-            expect(coins.filter(x => x.config.token === USDC2.address)[0].config.hasPermit).to.equal(true)
-            expect(coins.filter(x => x.config.token === USDT2.address)[0].config.token).to.equal(USDT2.address)
-            expect(coins.filter(x => x.config.token === USDT2.address)[0].config.decimals).to.equal(6)
-            expect(coins.filter(x => x.config.token === USDT2.address)[0].config.hasPermit).to.equal(false)
-            expect(coins.filter(x => x.config.token === DAI2.address)[0].config.token).to.equal(DAI2.address)
-            expect(coins.filter(x => x.config.token === DAI2.address)[0].config.decimals).to.equal(18)
-            expect(coins.filter(x => x.config.token === DAI2.address)[0].config.hasPermit).to.equal(true)
-            expect(coins.filter(x => x.config.token === DAI2.address)[0].name).to.equal(await DAI2.name())
-            expect(coins.filter(x => x.config.token === DAI2.address)[0].symbol).to.equal(await DAI2.symbol())
+            expect(coins.filter(x => x.token === USDC2.address)[0].token).to.equal(USDC2.address)
+            expect(coins.filter(x => x.token === USDC2.address)[0].decimals).to.equal(6)
+            expect(coins.filter(x => x.token === USDT2.address)[0].token).to.equal(USDT2.address)
+            expect(coins.filter(x => x.token === USDT2.address)[0].decimals).to.equal(6)
+            expect(coins.filter(x => x.token === DAI2.address)[0].token).to.equal(DAI2.address)
+            expect(coins.filter(x => x.token === DAI2.address)[0].decimals).to.equal(18)
+            expect(coins.filter(x => x.token === DAI2.address)[0].name).to.equal(await DAI2.name())
+            expect(coins.filter(x => x.token === DAI2.address)[0].symbol).to.equal(await DAI2.symbol())
         })
 
-        it("addStablecoin fails if existing", async function () {
-            await expect(stablecoins.connect(owner).addStablecoin(USDC.address, true)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
-            await expect(stablecoins.connect(owner).addStablecoin(USDT.address, true)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
-            await expect(stablecoins.connect(owner).addStablecoin(DAI.address, true)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
-            await expect(stablecoins.connect(owner).addStablecoin(USDC2.address, true)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
-            await expect(stablecoins.connect(owner).addStablecoin(USDT2.address, true)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
-            await expect(stablecoins.connect(owner).addStablecoin(DAI2.address, true)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
+        it("add fails if existing", async function () {
+            await expect(stablecoins.connect(owner).add(USDC.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
+            await expect(stablecoins.connect(owner).add(USDT.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
+            await expect(stablecoins.connect(owner).add(DAI.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
+            await expect(stablecoins.connect(owner).add(USDC2.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
+            await expect(stablecoins.connect(owner).add(USDT2.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
+            await expect(stablecoins.connect(owner).add(DAI2.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinAlreadyExists")
         })
 
-        it("removeStablecoin fails for built-in", async function () {
-            await expect(stablecoins.connect(owner).removeStablecoin(USDC.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
-            await expect(stablecoins.connect(owner).removeStablecoin(USDT.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
-            await expect(stablecoins.connect(owner).removeStablecoin(DAI.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
+        it("remove fails for built-in", async function () {
+            await expect(stablecoins.connect(owner).remove(USDC.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
+            await expect(stablecoins.connect(owner).remove(USDT.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
+            await expect(stablecoins.connect(owner).remove(DAI.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinBakedIn")
         })
 
-        it("getStablecoinConfig works for USDC", async function () {
-            const config = await stablecoins.getStablecoinConfig(USDC.address)
-            await expect(config.token).to.equal(USDC.address)
-            await expect(config.decimals).to.equal(6)
-            await expect(config.hasPermit).to.equal(true)
+        it("getDecimals works", async function () {
+            await expect(await stablecoins.getMultiplyFactor(USDC.address)).to.equal(factor6)
+            await expect(await stablecoins.getMultiplyFactor(USDT.address)).to.equal(factor6)
+            await expect(await stablecoins.getMultiplyFactor(DAI.address)).to.equal(1)
+            await expect(await stablecoins.getMultiplyFactor(USDC2.address)).to.equal(factor6)
+            await expect(await stablecoins.getMultiplyFactor(USDT2.address)).to.equal(factor6)
+            await expect(await stablecoins.getMultiplyFactor(DAI2.address)).to.equal(1)
         })
 
-        it("getStablecoinConfig works for USDT", async function () {
-            const config = await stablecoins.getStablecoinConfig(USDT.address)
-            await expect(config.token).to.equal(USDT.address)
-            await expect(config.decimals).to.equal(6)
-            await expect(config.hasPermit).to.equal(false)
+        it("getDecimals fails for address(0)", async function () {
+            await expect(stablecoins.getMultiplyFactor(constants.AddressZero)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
         })
-
-        it("getStablecoinConfig works for DAI", async function () {
-            const config = await stablecoins.getStablecoinConfig(DAI.address)
-            await expect(config.token).to.equal(DAI.address)
-            await expect(config.decimals).to.equal(18)
-            await expect(config.hasPermit).to.equal(true)
-        })
-
-        it("getStablecoinConfig works for USDC2", async function () {
-            const config = await stablecoins.getStablecoinConfig(USDC2.address)
-            await expect(config.token).to.equal(USDC2.address)
-            await expect(config.decimals).to.equal(6)
-            await expect(config.hasPermit).to.equal(true)
-        })
-
-        it("getStablecoinConfig works for USDT2", async function () {
-            const config = await stablecoins.getStablecoinConfig(USDT2.address)
-            await expect(config.token).to.equal(USDT2.address)
-            await expect(config.decimals).to.equal(6)
-            await expect(config.hasPermit).to.equal(false)
-        })
-
-        it("getStablecoinConfig works for DAI2", async function () {
-            const config = await stablecoins.getStablecoinConfig(DAI2.address)
-            await expect(config.token).to.equal(DAI2.address)
-            await expect(config.decimals).to.equal(18)
-            await expect(config.hasPermit).to.equal(true)
-        })
-
-        it("getStablecoinConfig fails for address(0)", async function () {
-            await expect(stablecoins.getStablecoinConfig(constants.AddressZero)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
-        })
-        it("getStablecoinConfig fails for non-existent", async function () {
-            await expect(stablecoins.getStablecoinConfig(user1.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
+        it("getDecimals fails for non-existent", async function () {
+            await expect(stablecoins.getMultiplyFactor(user1.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
         })
 
         describe("extra stablecoins removed", async function () {
             beforeEach(async function () {
-                await stablecoins.connect(owner).removeStablecoin(USDC2.address)
-                await stablecoins.connect(owner).removeStablecoin(USDT2.address)
-                await stablecoins.connect(owner).removeStablecoin(DAI2.address)
+                await stablecoins.connect(owner).remove(USDC2.address)
+                await stablecoins.connect(owner).remove(USDT2.address)
+                await stablecoins.connect(owner).remove(DAI2.address)
             })
 
             it("initializes as expected", async function () {
                 expect(await stablecoins.owner()).to.equal(owner.address)
-                expect((await stablecoins.getStablecoin1()).token).to.equal(USDC.address)
-                expect((await stablecoins.getStablecoin1()).decimals).to.equal(6)
-                expect((await stablecoins.getStablecoin1()).hasPermit).to.equal(true)
-                expect((await stablecoins.getStablecoin2()).token).to.equal(USDT.address)
-                expect((await stablecoins.getStablecoin2()).decimals).to.equal(6)
-                expect((await stablecoins.getStablecoin2()).hasPermit).to.equal(false)
-                expect((await stablecoins.getStablecoin3()).token).to.equal(DAI.address)
-                expect((await stablecoins.getStablecoin3()).decimals).to.equal(18)
-                expect((await stablecoins.getStablecoin3()).hasPermit).to.equal(true)
-                const coins = await stablecoins.supportedStablecoins()
+                expect(await stablecoins.getStablecoin1()).to.equal(USDC.address)
+                expect(await stablecoins.getStablecoin2()).to.equal(USDT.address)
+                expect(await stablecoins.getStablecoin3()).to.equal(DAI.address)
+                const coins = await stablecoins.supported()
                 expect(coins.length).to.equal(3)
-                expect(coins[0].config.token).to.equal(USDC.address)
-                expect(coins[0].config.decimals).to.equal(6)
-                expect(coins[0].config.hasPermit).to.equal(true)
-                expect(coins[1].config.token).to.equal(USDT.address)
-                expect(coins[1].config.decimals).to.equal(6)
-                expect(coins[1].config.hasPermit).to.equal(false)
-                expect(coins[2].config.token).to.equal(DAI.address)
-                expect(coins[2].config.decimals).to.equal(18)
-                expect(coins[2].config.hasPermit).to.equal(true)
+                expect(coins[0].token).to.equal(USDC.address)
+                expect(coins[0].decimals).to.equal(6)
+                expect(coins[1].token).to.equal(USDT.address)
+                expect(coins[1].decimals).to.equal(6)
+                expect(coins[2].token).to.equal(DAI.address)
+                expect(coins[2].decimals).to.equal(18)
             })
 
-            it("removeStablecoin fails for already-removed", async function () {
-                await expect(stablecoins.connect(owner).removeStablecoin(USDC2.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinDoesNotExist")
-                await expect(stablecoins.connect(owner).removeStablecoin(USDT2.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinDoesNotExist")
-                await expect(stablecoins.connect(owner).removeStablecoin(DAI2.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinDoesNotExist")
+            it("remove fails for already-removed", async function () {
+                await expect(stablecoins.connect(owner).remove(USDC2.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinDoesNotExist")
+                await expect(stablecoins.connect(owner).remove(USDT2.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinDoesNotExist")
+                await expect(stablecoins.connect(owner).remove(DAI2.address)).to.be.revertedWithCustomError(stablecoins, "StablecoinDoesNotExist")
             })
 
-            it("getStablecoinConfig works for USDC", async function () {
-                const config = await stablecoins.getStablecoinConfig(USDC.address)
-                await expect(config.token).to.equal(USDC.address)
-                await expect(config.decimals).to.equal(6)
-                await expect(config.hasPermit).to.equal(true)
+            it("getDecimals works", async function () {
+                await expect(await stablecoins.getMultiplyFactor(USDC.address)).to.equal(factor6)
+                await expect(await stablecoins.getMultiplyFactor(USDT.address)).to.equal(factor6)
+                await expect(await stablecoins.getMultiplyFactor(DAI.address)).to.equal(1)
             })
 
-            it("getStablecoinConfig works for USDT", async function () {
-                const config = await stablecoins.getStablecoinConfig(USDT.address)
-                await expect(config.token).to.equal(USDT.address)
-                await expect(config.decimals).to.equal(6)
-                await expect(config.hasPermit).to.equal(false)
+            it("getDecimals fails for address(0)", async function () {
+                await expect(stablecoins.getMultiplyFactor(constants.AddressZero)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
             })
 
-            it("getStablecoinConfig works for DAI", async function () {
-                const config = await stablecoins.getStablecoinConfig(DAI.address)
-                await expect(config.token).to.equal(DAI.address)
-                await expect(config.decimals).to.equal(18)
-                await expect(config.hasPermit).to.equal(true)
+            it("getDecimals fails for non-existent", async function () {
+                await expect(stablecoins.getMultiplyFactor(user1.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
             })
 
-            it("getStablecoinConfig fails for address(0)", async function () {
-                await expect(stablecoins.getStablecoinConfig(constants.AddressZero)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
-            })
-
-            it("getStablecoinConfig fails for non-existent", async function () {
-                await expect(stablecoins.getStablecoinConfig(user1.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
-            })
-
-            it("getStablecoinConfig fails for removed", async function () {
-                await expect(stablecoins.getStablecoinConfig(USDC2.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
-                await expect(stablecoins.getStablecoinConfig(USDT2.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
-                await expect(stablecoins.getStablecoinConfig(DAI2.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
+            it("getDecimals fails for removed", async function () {
+                await expect(stablecoins.getMultiplyFactor(USDC2.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
+                await expect(stablecoins.getMultiplyFactor(USDT2.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
+                await expect(stablecoins.getMultiplyFactor(DAI2.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
             })
         })
     })
 
     describe("no built-ins", function () {
         beforeEach(async function () {
-            stablecoins = await factories.REStablecoins.deploy({ token: constants.AddressZero, decimals: 0, hasPermit: false }, { token: constants.AddressZero, decimals: 6, hasPermit: true }, { token: constants.AddressZero, decimals: 200, hasPermit: true })
+            stablecoins = await factories.REStablecoins.deploy(constants.AddressZero, constants.AddressZero, constants.AddressZero)
         })
 
         it("initialized as expected", async function () {
             expect(await stablecoins.owner()).to.equal(owner.address)
-            const coins = await stablecoins.supportedStablecoins()
+            const coins = await stablecoins.supported()
             expect(coins.length).to.equal(0)
         })
 
         it("add/remove works", async function () {
-            await stablecoins.addStablecoin(USDC.address, true)
-            let coins = await stablecoins.supportedStablecoins()
+            await stablecoins.add(USDC.address)
+            let coins = await stablecoins.supported()
             expect(coins.length).to.equal(1)
-            expect(coins[0].config.token).to.equal(USDC.address)
-            expect(coins[0].config.decimals).to.equal(6)
-            expect(coins[0].config.hasPermit).to.equal(true)
-            const config = await stablecoins.getStablecoinConfig(USDC.address)
-            expect(config.token).to.equal(USDC.address)
-            expect(config.decimals).to.equal(6)
-            expect(config.hasPermit).to.equal(true)
-            await stablecoins.removeStablecoin(USDC.address)
-            coins = await stablecoins.supportedStablecoins()
+            expect(coins[0].token).to.equal(USDC.address)
+            expect(coins[0].decimals).to.equal(6)
+            expect(await stablecoins.getMultiplyFactor(USDC.address)).to.equal(factor6)
+            await stablecoins.remove(USDC.address)
+            coins = await stablecoins.supported()
             expect(coins.length).to.equal(0)
-            await expect(stablecoins.getStablecoinConfig(USDC.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
+            await expect(stablecoins.getMultiplyFactor(USDC.address)).to.be.revertedWithCustomError(stablecoins, "TokenNotSupported")
         })
     })
 })
