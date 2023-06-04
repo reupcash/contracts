@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 /*
     Adapted from openzeppelin's `Address.sol`    
@@ -47,9 +47,10 @@ library CheapSafeCall
     }
     /**
         Makes a call
-        Returns true if the call succeded, and it was to a contract address (ignores any return value)        
-        Returns false if the call succeeded and nothing was returned
-        Bubbles up the revert reason if the call reverted
+        Success, to a contract:  Returns true
+        Success, with any result:  Returns true
+        Failure:  Returns false
+        Reverted:  Reverts
      */
     function call(address addr, bytes memory data)
         internal

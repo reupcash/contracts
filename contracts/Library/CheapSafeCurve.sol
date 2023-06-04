@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: reup.cash
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./CheapSafeERC20.sol";
@@ -19,6 +19,7 @@ library CheapSafeCurve
     error NoPoolTokensMinted();
     error RemoveCurveLiquidityOneCoinCallFailed();
     error InsufficientTokensReceived();
+    error GaugeWithdrawFailed();
 
     /**
         We call "add_liquidity", ignoring any return value or lack thereof
@@ -74,6 +75,22 @@ library CheapSafeCurve
         if (receiver != address(this))
         {
             token.safeTransfer(receiver, amountReceived);
+        }
+    }
+
+    /**
+        Curve gauges don't have any consistent withdraw function including claim rewards control.
+        On ethereum, it's withdraw(amount, claimRewards)
+        On arbitrum, it's withdraw(amount, user, claimRewards)
+        We'll try both.
+    */
+    function safeWithdraw(address gauge, uint256 amount, bool claimRewards)
+        internal
+    {
+        if (!CheapSafeCall.call(gauge, abi.encodeWithSignature("withdraw(uint256,address,bool)", amount, address(this), claimRewards)) &&
+            !CheapSafeCall.call(gauge, abi.encodeWithSignature("withdraw(uint256,bool)", amount, claimRewards)))
+        {
+            revert GaugeWithdrawFailed();
         }
     }
 }
