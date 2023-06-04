@@ -3,11 +3,10 @@ pragma solidity ^0.8.19;
 
 import "./ICurveStableSwap.sol";
 
-interface ICurveGauge is IERC20Full
+interface ICurveGauge2 is IERC20Full
 {
     struct Reward
     {
-        address token;
         address distributor;
         uint256 period_finish;
         uint256 rate;
